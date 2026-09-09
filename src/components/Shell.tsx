@@ -11,6 +11,7 @@ import {
 import type { Locale } from "@/lib/types";
 import { messages } from "@/lib/messages";
 import { isDemo } from "@/lib/api";
+import { LANGUAGE_PREFERENCE_KEY } from "@/lib/locale-entry";
 const LocaleContext = createContext<Locale>("zh");
 export const useLocale = () => useContext(LocaleContext);
 export function Shell({
@@ -26,7 +27,6 @@ export function Shell({
   const [query, setQuery] = useState("");
   useEffect(() => {
     document.documentElement.lang = locale;
-    localStorage.setItem("gallery-locale", locale);
     setQuery(window.location.search);
     const fn = () => setQuery(window.location.search);
     window.addEventListener("popstate", fn);
@@ -74,6 +74,13 @@ export function Shell({
           </Link>
           <a
             className="language"
+            onClick={() => {
+              try {
+                localStorage.setItem(LANGUAGE_PREFERENCE_KEY, other);
+              } catch {
+                // A storage restriction must never prevent navigation.
+              }
+            }}
             href={`${path.replace(/^\/(zh|en)/, `/${other}`)}${query}`}
           >
             {t.language}
