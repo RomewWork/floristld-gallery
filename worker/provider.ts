@@ -195,7 +195,10 @@ export async function publicCopy(
   let fileId = pendingId;
   if (!fileId) {
     const form = new FormData();
-    form.set("file", await signedUrl(asset.url, env));
+    // Copy the stored original, not the CDN's automatically optimized response.
+    const source = new URL(asset.url);
+    source.searchParams.set("tr", "orig-true");
+    form.set("file", await signedUrl(source.toString(), env));
     form.set("fileName", fileName);
     form.set("folder", folder);
     form.set("useUniqueFileName", "false");
@@ -228,12 +231,28 @@ export async function publicCopy(
     details.fileId !== fileId ||
     details.isPrivateFile !== false ||
     details.filePath !== path ||
-    details.size !== asset.bytes ||
+    details.name !== fileName ||
     details.width !== asset.width ||
     details.height !== asset.height ||
     details.fileType !== "image" ||
     !details.url.startsWith(`${providerConfig(env).endpoint}/`)
   )
     fail(502, "PUBLIC_COPY_VERIFICATION", "公开图片副本验证失败，作品未发布");
+  if (details.size !== asset.bytes) {
+    // Repair a previous optimized copy only after its identity, public path,
+    // type and dimensions pass verification. The fresh attempt cannot recurse.
+    if (
+      pendingId &&
+      Number.isInteger(details.size) &&
+      details.size > 0 &&
+      details.size <= 5000000
+    )
+      return publicCopy(asset, env, onUploaded);
+    fail(
+      502,
+      "PUBLIC_COPY_VERIFICATION",
+      "公开副本大小与原图不一致，作品未发布",
+    );
+  }
   return details;
 }

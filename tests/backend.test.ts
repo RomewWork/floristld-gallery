@@ -16,6 +16,7 @@ import {
   verifyFile,
   hmac,
   signedUrl,
+  publicCopy,
   type FileDetails,
   type Session,
 } from "../worker/provider";
@@ -317,6 +318,88 @@ describe("public projection and publish prerequisites", () => {
   });
 });
 describe("upload verification", () => {
+  afterEach(() => vi.unstubAllGlobals());
+  it.each([
+    { size: 500, filePath: "/other/file.jpg" },
+    { size: 500, isPrivateFile: true },
+    { size: 500, width: 99 },
+  ])("does not overwrite an invalid pending copy %j", async (changes) => {
+    const copy = {
+      fileId: "pending",
+      name: "asset-1.jpg",
+      filePath: "/gallery/public/asset-1.jpg",
+      url: "https://ik.imagekit.io/test/gallery/public/asset-1.jpg",
+      width: 100,
+      height: 100,
+      fileType: "image",
+      isPrivateFile: false,
+      ...changes,
+    };
+    const fetcher = vi.fn().mockResolvedValue(Response.json(copy));
+    vi.stubGlobal("fetch", fetcher);
+    await expect(
+      publicCopy(asset, providerEnv as Env, vi.fn(), "pending"),
+    ).rejects.toMatchObject({ code: "PUBLIC_COPY_VERIFICATION" });
+    expect(fetcher).toHaveBeenCalledTimes(1);
+  });
+  it("rejects a fresh size mismatch without repeatedly uploading", async () => {
+    const copy = {
+      fileId: "pending",
+      name: "asset-1.jpg",
+      filePath: "/gallery/public/asset-1.jpg",
+      url: "https://ik.imagekit.io/test/gallery/public/asset-1.jpg",
+      size: 500,
+      width: 100,
+      height: 100,
+      fileType: "image",
+      isPrivateFile: false,
+    };
+    const fetcher = vi.fn().mockImplementation(async () => Response.json(copy));
+    vi.stubGlobal("fetch", fetcher);
+    await expect(
+      publicCopy(asset, providerEnv as Env, vi.fn(), "pending"),
+    ).rejects.toMatchObject({ code: "PUBLIC_COPY_VERIFICATION" });
+    expect(fetcher).toHaveBeenCalledTimes(3);
+  });
+  it.each([undefined, "pending-copy"])(
+    "copies original bytes and repairs optimized pending copy %s",
+    async (pendingId) => {
+      const original = {
+        ...asset,
+        bytes: 74812,
+        isPrivate: true,
+        url: "https://ik.imagekit.io/test/source.webp?updatedAt=123",
+      };
+      const copy = {
+        fileId: "pending-copy",
+        name: "asset-1.webp",
+        filePath: "/gallery/public/asset-1.webp",
+        url: "https://ik.imagekit.io/test/gallery/public/asset-1.webp",
+        width: 100,
+        height: 100,
+        size: 74812,
+        fileType: "image",
+        isPrivateFile: false,
+      };
+      const fetcher = vi.fn();
+      if (pendingId)
+        fetcher.mockResolvedValueOnce(Response.json({ ...copy, size: 43066 }));
+      fetcher
+        .mockImplementationOnce(async (_url, init) => {
+          const source = new URL((init.body as FormData).get("file") as string);
+          expect(source.searchParams.get("tr")).toBe("orig-true");
+          expect(source.searchParams.get("ik-s")).toBeTruthy();
+          return Response.json(copy);
+        })
+        .mockResolvedValueOnce(Response.json(copy));
+      vi.stubGlobal("fetch", fetcher);
+      const uploaded = vi.fn();
+      await expect(
+        publicCopy(original, providerEnv as Env, uploaded, pendingId),
+      ).resolves.toMatchObject({ size: 74812 });
+      expect(uploaded).toHaveBeenCalledWith(copy);
+    },
+  );
   const session: Session = {
     id: "upload-1",
     owner: "owner@example.com",
