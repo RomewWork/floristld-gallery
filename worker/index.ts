@@ -515,11 +515,10 @@ async function mutate(
       } catch {
         return fail(502, "MEDIA_VERIFICATION", "暂时无法验证图片格式");
       }
-      if (
-        !media.ok ||
-        media.headers.get("content-type")?.split(";")[0].trim() !==
-          session!.mime
-      )
+      // The provider's file-details API verifies the original file type,
+      // while its delivery response may advertise a negotiated/generic type.
+      // Only require that the signed private asset is reachable here.
+      if (!media.ok)
         fail(400, "UPLOAD_MIME", "图片实际格式与上传声明不一致");
       await executeBatch(env, [
         env.DB.prepare(

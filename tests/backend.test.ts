@@ -662,7 +662,11 @@ describe("Worker and real SQLite mutation behavior", () => {
         .fn()
         .mockResolvedValueOnce(Response.json(details))
         .mockResolvedValueOnce(
-          new Response(null, { headers: { "Content-Type": "image/jpeg" } }),
+          new Response(null, {
+            // ImageKit's delivery layer may use a generic response type even
+            // after its file-details API has verified the uploaded image.
+            headers: { "Content-Type": "application/octet-stream" },
+          }),
         ),
     );
     expect(
