@@ -1,0 +1,14 @@
+name = "floristld-gallery-public"
+main = "worker/index.ts"
+compatibility_date = "2026-09-08"
+
+[vars]
+ENVIRONMENT = "production"
+PUBLIC_ONLY = "true"
+PUBLIC_ORIGIN = "https://your-gallery.pages.dev"
+
+[[d1_databases]]
+binding = "DB"
+database_name = "gallery"
+database_id = "356422d4-d2f0-4d83-b987-195d1450e4b8"
+migrations_dir = "migrations"

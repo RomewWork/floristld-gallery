@@ -1,0 +1,13 @@
+PRAGMA foreign_keys = ON;
+CREATE TABLE collections (id TEXT PRIMARY KEY, slug TEXT NOT NULL UNIQUE, data TEXT NOT NULL CHECK(json_valid(data)), version INTEGER NOT NULL DEFAULT 1);
+CREATE TABLE assets (id TEXT PRIMARY KEY, file_id TEXT NOT NULL UNIQUE, data TEXT NOT NULL CHECK(json_valid(data)), public_file_id TEXT UNIQUE, public_url TEXT, public_bytes INTEGER NOT NULL DEFAULT 0);
+CREATE TABLE artworks (id TEXT PRIMARY KEY, collection_id TEXT NOT NULL REFERENCES collections(id), asset_id TEXT NOT NULL REFERENCES assets(id), data TEXT NOT NULL CHECK(json_valid(data)), version INTEGER NOT NULL DEFAULT 1);
+CREATE INDEX artworks_collection ON artworks(collection_id);
+CREATE INDEX artworks_asset ON artworks(asset_id);
+CREATE INDEX collections_status ON collections(json_extract(data,'$.status'),json_extract(data,'$.deletedAt'));
+CREATE TABLE profile (id INTEGER PRIMARY KEY CHECK(id=1), data TEXT NOT NULL CHECK(json_valid(data)));
+INSERT INTO profile VALUES (1,'{"name":{"zh":"FLORIST LD","en":"FLORIST LD"},"tagline":{"zh":"","en":""},"bio":{"zh":"","en":""},"email":"","instagram":"","contact":""}');
+CREATE TABLE upload_sessions (id TEXT PRIMARY KEY, owner TEXT NOT NULL, file_name TEXT NOT NULL, folder TEXT NOT NULL, bytes INTEGER NOT NULL CHECK(bytes>0 AND bytes<=5000000), mime TEXT NOT NULL, expires INTEGER NOT NULL, state TEXT NOT NULL CHECK(state IN ('pending','verifying','complete')), asset_id TEXT REFERENCES assets(id), file_id TEXT);
+CREATE INDEX uploads_capacity ON upload_sessions(state,expires);
+CREATE TABLE mutation_lock (id INTEGER PRIMARY KEY CHECK(id=1), token TEXT NOT NULL, expires INTEGER NOT NULL);
+CREATE TABLE mutation_guard (id INTEGER PRIMARY KEY CHECK(id=1), valid INTEGER NOT NULL CHECK(valid=1));
