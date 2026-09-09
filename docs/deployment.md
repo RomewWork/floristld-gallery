@@ -79,7 +79,7 @@ npx wrangler pages deploy out --project-name floristld
 - Pages 项目：floristld，仓库 RomewWork/floristld-gallery，main 分支。旧 floristld-gallery.pages.dev 已删除，不再列入 CORS。
 - 稳定画廊入口：https://floristld.pages.dev/zh/ 。NEXT_PUBLIC_SITE_URL=https://floristld.pages.dev。
 - 浏览器读取同源 /api/public/gallery，由 functions/api/public/gallery.ts 通过 PUBLIC_API 绑定访问 floristld-gallery-public；只允许 GET，不转发 Cookie 或 Access 凭证。public/_routes.json 将 Function 限定在这个路径，静态页面保持静态托管。
-- NEXT_PUBLIC_ADMIN_URL=https://floristld-gallery-api.1084459061.workers.dev/admin/；管理构建的 API 地址也保持空值。管理入口必须由 Cloudflare Access 保护，并使用与 ACCESS_AUD 一致的应用。
+- NEXT_PUBLIC_ADMIN_URL=https://floristld-gallery-api.romewwork.workers.dev/admin/；管理构建的 API 地址也保持空值。管理入口必须由 Cloudflare Access 保护，并使用与 ACCESS_AUD 一致的应用。
 - 两个 Worker 保留 workers.dev 入口，关闭预览 URL；PUBLIC_ORIGIN=https://floristld.pages.dev，PUBLIC_ADDITIONAL_ORIGINS=https://crossingriver.love。
 - crossingriver.love 及 api/admin 子域名仅作为目前有效的附加入口。域名到期后，访问这些地址本身无法自动转向备用站点；应提前收藏/分享 pages.dev 地址。主站列表、图片（ik.imagekit.io）和管理 Worker 的备用地址不依赖这个域名。
 - 确认不续费时，在到期前从 Pages 移除 crossingriver.love 自定义域，从两个 Worker 移除 api/admin 自定义域，从 Access 应用移除对应自定义主机名，并清空两个配置文件的 PUBLIC_ADDITIONAL_ORIGINS 后重新部署。保留 workers.dev 的 Access 应用及 ACCESS_AUD。此清理需要在决定停用时执行，当前仍保留有效线上入口。
