@@ -989,6 +989,9 @@ describe("Worker and real SQLite mutation behavior", () => {
         .bind(aid)
         .first(),
     ).toMatchObject({ public_file_id: "public-id" });
+    expect(vi.mocked(fetch).mock.calls[1]?.[0]).toBe(
+      "https://api.imagekit.io/v1/files/public-id/details?responseFields=isPrivateFile",
+    );
     expect(
       (
         await request(e, `/api/admin/collections/${c.id}/publish`, "POST", {

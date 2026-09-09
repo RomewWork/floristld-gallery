@@ -222,7 +222,7 @@ export async function publicCopy(
   }
   const details = (await providerRequest(
     env,
-    `${encodeURIComponent(fileId)}/details`,
+    `${encodeURIComponent(fileId)}/details?responseFields=isPrivateFile`,
   )) as FileDetails;
   if (
     details.fileId !== fileId ||
