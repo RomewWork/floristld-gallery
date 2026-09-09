@@ -4,7 +4,7 @@ compatibility_date = "2026-09-08"
 
 [vars]
 ENVIRONMENT = "production"
-PUBLIC_ORIGIN = "https://gallery.example.com"
+PUBLIC_ORIGIN = "https://floristld-gallery.pages.dev"
 ACCESS_TEAM_DOMAIN = "red-cloud-5baa.cloudflareaccess.com"
 ACCESS_AUD = "284503c52c7f6954a2f632284b521fa6ecd3cb35566e1ecc8797a0f181c4312a"
 ADMIN_EMAILS = "1084459061@qq.com"
