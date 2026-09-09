@@ -66,13 +66,24 @@ wrangler.public.toml 设置 PUBLIC_ORIGIN 为最终 Pages origin（不含路径�
 npx wrangler deploy --config wrangler.public.toml
 ```
 
-随后将 .env.local 中 NEXT_PUBLIC_API_URL 改成只读 Worker origin，其余保持 live。重新 npm run build；将 out/ 部署到 Pages。可以用控制台 Git 集成（build=npm run build，output=out）或：
+公共站现在通过 Pages Function 的 PUBLIC_API Service binding 调用只读 Worker，不经过自定义域名 DNS。Pages 生产和预览环境都绑定 PUBLIC_API → floristld-gallery-public；NEXT_PUBLIC_API_URL 留空，其余保持 live。重新 npm run build；将 out/ 和仓库根目录的 functions/ 部署到 Pages。可以用控制台 Git 集成（build=npm run build，output=out）或：
 
 ```powershell
-npx wrangler pages deploy out --project-name floristld-gallery
+npx wrangler pages deploy out --project-name floristld
 ```
 
 公共构建不要重新运行 admin:build 覆盖已打包的同源管理资源。更新管理站时重新按管理配置构建。所有 NEXT_PUBLIC_* 都是构建时值，修改后必须重新构建。
+
+## 当前域名与到期安排
+
+- Pages 项目：floristld，仓库 RomewWork/floristld-gallery，main 分支。旧 floristld-gallery.pages.dev 已删除，不再列入 CORS。
+- 稳定画廊入口：https://floristld.pages.dev/zh/ 。NEXT_PUBLIC_SITE_URL=https://floristld.pages.dev。
+- 浏览器读取同源 /api/public/gallery，由 functions/api/public/gallery.ts 通过 PUBLIC_API 绑定访问 floristld-gallery-public；只允许 GET，不转发 Cookie 或 Access 凭证。public/_routes.json 将 Function 限定在这个路径，静态页面保持静态托管。
+- NEXT_PUBLIC_ADMIN_URL=https://floristld-gallery-api.1084459061.workers.dev/admin/；管理构建的 API 地址也保持空值。管理入口必须由 Cloudflare Access 保护，并使用与 ACCESS_AUD 一致的应用。
+- 两个 Worker 保留 workers.dev 入口，关闭预览 URL；PUBLIC_ORIGIN=https://floristld.pages.dev，PUBLIC_ADDITIONAL_ORIGINS=https://crossingriver.love。
+- crossingriver.love 及 api/admin 子域名仅作为目前有效的附加入口。域名到期后，访问这些地址本身无法自动转向备用站点；应提前收藏/分享 pages.dev 地址。主站列表、图片（ik.imagekit.io）和管理 Worker 的备用地址不依赖这个域名。
+- 确认不续费时，在到期前从 Pages 移除 crossingriver.love 自定义域，从两个 Worker 移除 api/admin 自定义域，从 Access 应用移除对应自定义主机名，并清空两个配置文件的 PUBLIC_ADDITIONAL_ORIGINS 后重新部署。保留 workers.dev 的 Access 应用及 ACCESS_AUD。此清理需要在决定停用时执行，当前仍保留有效线上入口。
+- 备用 Pages 和 Workers 地址不保证中国大陆所有运营商可达；尤其后台 workers.dev 可能仍需代理。若要求长期稳定国内直连，应维持有效自定义域名和合适的托管线路；内部 Service binding 仅消除了浏览器直连公开 workers.dev API 的依赖。
 
 ## 本地真实 API 调试
 
