@@ -509,7 +509,7 @@ async function mutate(
       try {
         media = await fetch(await signedUrl(asset.url, env), {
           method: "HEAD",
-          redirect: "error",
+          redirect: "follow",
           signal: AbortSignal.timeout(15000),
         });
       } catch {

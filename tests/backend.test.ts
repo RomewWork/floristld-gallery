@@ -680,6 +680,10 @@ describe("Worker and real SQLite mutation behavior", () => {
         .bind(ticket.sessionId)
         .first(),
     ).toMatchObject({ state: "complete" });
+    expect(vi.mocked(fetch).mock.calls[1]?.[1]).toMatchObject({
+      method: "HEAD",
+      redirect: "follow",
+    });
     expect(
       (
         await request(
