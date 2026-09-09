@@ -5,7 +5,7 @@ compatibility_date = "2026-09-08"
 [vars]
 ENVIRONMENT = "production"
 PUBLIC_ONLY = "true"
-PUBLIC_ORIGIN = "https://floristld-gallery.pages.dev"
+PUBLIC_ORIGIN = "https://crossingriver.love"
 
 [[d1_databases]]
 binding = "DB"
