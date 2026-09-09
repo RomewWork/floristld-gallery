@@ -518,8 +518,7 @@ async function mutate(
       // The provider's file-details API verifies the original file type,
       // while its delivery response may advertise a negotiated/generic type.
       // Only require that the signed private asset is reachable here.
-      if (!media.ok)
-        fail(400, "UPLOAD_MIME", "图片实际格式与上传声明不一致");
+      if (!media.ok) fail(400, "UPLOAD_MIME", "图片实际格式与上传声明不一致");
       await executeBatch(env, [
         env.DB.prepare(
           "INSERT INTO assets(id,file_id,data) VALUES(?,?,?)",
@@ -826,13 +825,17 @@ const worker = {
       "Cache-Control": "no-store",
       "X-Content-Type-Options": "nosniff",
     });
-    if (
-      publicApi &&
-      env.PUBLIC_ORIGIN &&
-      request.headers.get("Origin") === env.PUBLIC_ORIGIN
-    ) {
-      headers.set("Access-Control-Allow-Origin", env.PUBLIC_ORIGIN);
+    if (publicApi) {
       headers.set("Vary", "Origin");
+      const origin = request.headers.get("Origin");
+      const allowed = [
+        env.PUBLIC_ORIGIN,
+        ...(env.PUBLIC_ADDITIONAL_ORIGINS || "")
+          .split(",")
+          .map((value) => value.trim()),
+      ].filter(Boolean);
+      if (origin && allowed.includes(origin))
+        headers.set("Access-Control-Allow-Origin", origin);
     }
     try {
       if (

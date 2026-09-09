@@ -12,6 +12,7 @@ export interface Env {
   ACCESS_AUD?: string;
   ADMIN_EMAILS?: string;
   PUBLIC_ORIGIN?: string;
+  PUBLIC_ADDITIONAL_ORIGINS?: string;
   IMAGEKIT_PRIVATE_KEY?: string;
   IMAGEKIT_PUBLIC_KEY?: string;
   IMAGEKIT_URL_ENDPOINT?: string;

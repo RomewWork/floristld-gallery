@@ -1395,6 +1395,42 @@ describe("Worker and real SQLite mutation behavior", () => {
       ),
     ).rejects.toMatchObject({ status: 400 });
   });
+  it("allows both configured public frontends but not lookalikes or admin CORS", async () => {
+    const e = {
+      ...env(),
+      PUBLIC_ORIGIN: "https://crossingriver.love",
+      PUBLIC_ADDITIONAL_ORIGINS: "https://floristld-gallery.pages.dev",
+    };
+    for (const origin of [e.PUBLIC_ORIGIN, e.PUBLIC_ADDITIONAL_ORIGINS]) {
+      const response = await request(
+        e,
+        "/api/public/gallery",
+        "GET",
+        undefined,
+        origin,
+      );
+      expect(response.status).toBe(200);
+      expect(response.headers.get("Access-Control-Allow-Origin")).toBe(origin);
+      expect(response.headers.get("Vary")).toBe("Origin");
+      const admin = await request(e, "/api/admin/me", "GET", undefined, origin);
+      expect(admin.headers.has("Access-Control-Allow-Origin")).toBe(false);
+    }
+    for (const origin of [
+      "https://floristld-gallery.pages.dev.evil.example",
+      "null",
+      "https://other.pages.dev",
+    ]) {
+      const response = await request(
+        e,
+        "/api/public/gallery",
+        "GET",
+        undefined,
+        origin,
+      );
+      expect(response.headers.has("Access-Control-Allow-Origin")).toBe(false);
+      expect(response.headers.get("Vary")).toBe("Origin");
+    }
+  });
   it("public-only deployment rejects admin and assets even when authentication would succeed", async () => {
     const e = { ...env(), PUBLIC_ONLY: "true" };
     expect((await request(e, "/api/admin/me")).status).toBe(404);
