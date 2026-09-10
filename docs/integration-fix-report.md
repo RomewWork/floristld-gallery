@@ -1,40 +1,33 @@
-# Integration fix report
+# 集成修复记录
 
-Completed the bounded review wave from `docs/integration-fix-brief.md`. No cloud changes, deployment, paid actions, or source-image edits were performed.
+本文记录 2026-09-09 已完成的修复及维护边界。原临时任务分工说明已移除，问题与处理结果保留于此。当时未进行云端部署、付费操作或原画修改。
 
-## Changes
+## 已修复的问题
 
-- **Expired upload completion:** Worker completion now reconciles previously issued owner-bound sessions even after the reservation expires. It issues no new upload ticket and does not change expiry. The exact assigned path, name, file ID, size, dimensions, MIME and private-file checks still apply. Completed sessions remain owner-bound and idempotent for the same file. The existing client checkpoint reuses its already uploaded file.
-- **Public-copy cleanup:** Provider upload responses distinguish definitive rejected uploads (400, 401, 403, 404, 413, 415, 422, 429) from unknown outcomes. A definitive first-attempt rejection clears the newly persisted intent under the mutation fence. If an earlier attempt was unknown, its intent remains, including when a later attempt is rejected. Empty lookup after unknown outcomes continues to preserve cleanup records. Recorded public IDs, wrong dimensions, and lost mutation leases retain existing safety behavior.
-- **Upload panel lifecycle:** Queue workers stop starting new items after unmount. Processing that finishes after unmount revokes its new preview. Active controllers are synchronously tracked and aborted on cleanup. Shared mutation requests and busy-response retries accept an optional AbortSignal; upload ticket/completion and artwork creation pass it through. Already issued external side effects cannot be undone by browser cancellation.
-- **Refresh failure:** Queue completion resets running state in `finally`. Failed gallery refresh shows an actionable `.upload-refresh-error` alert and a separate retry-refresh button, retaining completed queue items.
-- **Artwork creation retry:** Optional UUID `creationId` is validated by the Worker and reused as the artwork ID. A retry returns the existing artwork without adding another row or incrementing its collection version. Reuse with a different collection or asset returns 409. Queue UUIDs provide stable creation IDs. Demo mode follows the same deduplication behavior.
-- **Selected artwork routing:** Initial collection loading includes the artwork query, so a direct link can retrieve an artwork beyond the first page. Language links already preserve that query and now reach the corrected initial load.
-- **Failure accessibility and navigation:** Gallery image fallbacks avoid nested buttons inside artwork buttons and collection links. Standalone images retain a retry button; the lightbox now displays an alert with a retry button on image failure. Lightbox pointer capture excludes retry controls. The admin logo uses `NEXT_PUBLIC_SITE_URL`, matching the public-site link.
-- **Mobile header:** Navigation labels do not wrap within words; compact gaps and a wrapping header support narrow screens.
+1. **上传完成核验过期**：原管理员可继续核验原会话已上传的文件，不延长过期时间、不签发新票据。仍检查指定路径、名称、文件 ID、大小、尺寸、MIME 和私有性；相同文件重复完成保持幂等，客户端复用已有检查点。
+2. **公开副本清理**：区分明确拒绝（400、401、403、404、413、415、422、429）与结果未知。首次尝试明确被拒绝时，在租约保护下清除新建意图；此前有未知结果时，即使重试被拒绝仍保留意图。精确路径查不到文件也不抹除未知结果的清理记录。
+3. **上传面板生命周期**：卸载后停止领取队列任务；图片处理刚结束时若面板已卸载，立即释放新预览 URL。同步记录并取消活动请求，`AbortSignal` 传递到票据、核验、创建作品及繁忙重试等待。
+4. **结束刷新失败**：通过 `finally` 释放队列运行状态，保留已完成项，并显示独立的“重试刷新”入口，避免整条上传队列锁死。
+5. **创建作品重试去重**：队列 UUID 作为 `creationId`，服务端复用其作品 ID。重复请求返回原作品，不新增行或额外增加合集版本；改用不同合集或资源则返回 409。演示模式采用相同去重规则。
+6. **指定作品直达**：合集初次加载携带 `artwork` 参数，第一页之外的作品也能打开，切换语言继续保留该上下文。
+7. **图片错误与导航**：网格错误提示避免在父按钮或链接内嵌套按钮；灯箱增加重试提示，手势捕获避开重试按钮。后台标识链接使用 `NEXT_PUBLIC_SITE_URL` 指向公共站。
+8. **窄屏导航**：导航文字不在单词内部换行，缩小间距并允许页头换行。
 
-## Verification evidence
+## 当时的验证证据
 
-Focused tests were introduced before backend changes. The expired session test failed with 409 instead of entering file verification; creation retries failed validation; definitive rejected public copies remained pending cleanup. These passed after the fixes. The cancellation regression initially timed out because mutation retries ignored cancellation, and the demo idempotence regression produced two different artwork IDs; both passed after implementation.
+后端回归先复现过期会话无法核验、创建重试校验失败、明确拒绝后仍残留清理意图，再验证修复通过。取消回归曾因重试忽略取消而超时；演示去重回归曾生成不同作品 ID，两者修复后通过。
 
-Final local checks run by this agent on 2026-09-09:
+- 修复交付时：`node node_modules/vitest/vitest.mjs run` 共 56 项通过（45 后端、5 演示写入、4 客户端、2 上传恢复与取消）；类型检查和 lint 均退出 0，变更文件经过格式整理。
+- 中途浏览器测试记录为 14 项；主任务在最终修改后重新验证 16 项浏览器测试、构建与本地 Worker/D1，最终结果见[验收记录](acceptance.md)。
+- 当时运行提示仅有 Node 实验性 SQLite 提示及 npm 用户配置 `home` 提示。
 
-- `node node_modules/vitest/vitest.mjs run`: **56 tests passed**, four files. This includes 45 backend tests using real in-memory SQLite, five demo mutation tests, four client tests, and two upload recovery/cancellation tests.
-- `npm run typecheck`: exit 0.
-- `npm run lint`: exit 0, no ESLint warnings.
-- Prettier ran on the changed production/test files.
+## 维护时须保留的边界
 
-Runtime warnings were limited to Node's experimental SQLite notice and the existing npm user-config `home` warning.
+- 网络结果未知的外部写入必须保留清理线索，不能因暂时查不到文件就判定不存在。
+- 会话过期结束上传授权和空间预留；核验已上传文件会将资源纳入账面统计，实际占用仍以服务商为准。
+- 创建去重依赖已有作品行，永久删除后无法用原创建 ID 保证旧队列去重。
+- 浏览器取消只停止后续客户端工作和传输等待，不能撤销远端已接受的数据库或图片写入。
+- 排序接口的 1000 个 ID 上限未在这轮调整；运行限制见[部署说明](deployment.md)。
+- 没有据此声称真实图片服务、验证码收件、真机画质或区域网络已通过。
 
-Root owns browser tests and visual QA. Root reported all **14 desktop/mobile browser cases passed** before the final AbortSignal/demo parity changes, including the previously failing deep link and refresh failure. Root is rerunning final browser/build checks independently. Root also reported successful real local Worker/D1 smoke testing; this agent did not run that smoke test.
-
-## Boundaries and remaining operational considerations
-
-- No real ImageKit, Access email, deployed Cloudflare, true-artwork quality, or regional network verification is claimed.
-- Ambiguous provider writes deliberately remain pending when exact-path reconciliation returns no result. This prevents discarding a record while an upstream request could still create the public file.
-- Upload expiry still ends the original reservation and upload ticket; reconciliation adds the verified already-uploaded asset to recorded accounting. The provider remains the source of truth for physical usage, including abandoned uploads.
-- Creation idempotence is based on the retained artwork row, including soft-deleted rows. Permanently deleting that row also removes its creation deduplication record. Retrying an old queue after deliberate permanent deletion is outside the normal queue-recovery flow.
-- The existing 1000-item reorder request bound was not changed in this fix wave. Root owns documentation of operating limits.
-- Browser cancellation stops future client work and aborts transport/retry waiting. It does not promise reversal of provider/database writes already accepted remotely.
-
-Production files changed: `worker/index.ts`, `worker/provider.ts`, `src/lib/api.ts`, `src/lib/upload.ts`, `src/components/admin/Admin.tsx`, `src/components/Gallery.tsx`, `src/components/Lightbox.tsx`, `src/app/globals.css`. Regression files changed: `tests/backend.test.ts`, `tests/demo-mutations.test.ts`, `tests/upload-recovery.test.ts`. No migrations were added.
+涉及代码：`worker/index.ts`、`worker/provider.ts`、`src/lib/api.ts`、`src/lib/upload.ts`、`src/components/admin/Admin.tsx`、`src/components/Gallery.tsx`、`src/components/Lightbox.tsx`、`src/app/globals.css`。回归文件为 `tests/backend.test.ts`、`tests/demo-mutations.test.ts`、`tests/upload-recovery.test.ts`；本轮未新增迁移。

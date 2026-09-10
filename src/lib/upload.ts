@@ -1,7 +1,8 @@
 import { demoAsset, isDemo, mutate } from "./api";
 import type { Asset, UploadTicket } from "./types";
 import type { ProcessedImage } from "./process-image";
-// Keep the verified-upload checkpoint for this queue item, not a second upload on retry.
+// 已直传的文件按预处理对象保留检查点；核验失败后只重试完成请求，避免重复占用空间。
+// 检查点仅驻留内存，队列重试必须复用同一个 ProcessedImage 对象。
 const checkpoints = new WeakMap<
   ProcessedImage,
   { ticket: UploadTicket; fileId: string }
@@ -79,6 +80,7 @@ export async function uploadImage(
       f.set("overwriteFile", "false");
       xhr.send(f);
     }));
+  // 先记录再请求核验：即使完成响应丢失，也能用同一会话和文件 ID 恢复。
   checkpoints.set(image, { ticket, fileId: result.fileId });
   const asset = await mutate<Asset>(
     `/api/admin/uploads/${ticket.sessionId}/complete`,

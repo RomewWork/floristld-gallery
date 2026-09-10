@@ -16,8 +16,8 @@ ACCESS_AUD = "284503c52c7f6954a2f632284b521fa6ecd3cb35566e1ecc8797a0f181c4312a"
 ADMIN_EMAILS = "1084459061@qq.com"
 IMAGEKIT_PUBLIC_KEY = "public_6VL1OXPWDFt1XaEzcVPveC8/cK0="
 IMAGEKIT_URL_ENDPOINT = "https://ik.imagekit.io/floristld"
-# Set IMAGEKIT_PRIVATE_KEY with: npx wrangler secret put IMAGEKIT_PRIVATE_KEY
-# Local only: .dev.vars with ENVIRONMENT="development", DEV_AUTH="true".
+# 私钥通过 Secret 设置：npx wrangler secret put IMAGEKIT_PRIVATE_KEY
+# 仅本地 .dev.vars 可设置 ENVIRONMENT="development"、DEV_AUTH="true"。
 
 [[d1_databases]]
 binding = "DB"
@@ -28,5 +28,6 @@ migrations_dir = "migrations"
 [assets]
 directory = "./admin-dist"
 binding = "ASSETS"
+# 必须先经 Worker 鉴权，再返回管理页面及静态资源。
 run_worker_first = true
 not_found_handling = "none"

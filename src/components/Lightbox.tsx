@@ -44,6 +44,7 @@ export function Lightbox({
   }, [selected]);
   useEffect(() => {
     const previous = document.activeElement as HTMLElement;
+    // 弹层开启时锁定背景滚动，关闭后恢复原焦点，便于键盘继续浏览作品。
     const old = document.body.style.overflow;
     document.body.style.overflow = "hidden";
     dialog.current?.focus();
@@ -62,6 +63,7 @@ export function Lightbox({
           artworks[(index - 1 + artworks.length) % artworks.length].id,
         );
       if (e.key === "Tab") {
+        // 将 Tab 焦点限制在弹层控件内，Shift+Tab 反向循环。
         const list = Array.from(
           dialog.current?.querySelectorAll<HTMLElement>(
             "button:not(:disabled),a[href]",
@@ -137,6 +139,7 @@ export function Lightbox({
           if (e.ctrlKey) adjust(zoom + (e.deltaY < 0 ? 0.2 : -0.2));
         }}
         onPointerDown={(e) => {
+          // 重试按钮保留点击行为，不能被图片拖动的指针捕获接管。
           if ((e.target as HTMLElement).closest("button")) return;
           e.currentTarget.setPointerCapture(e.pointerId);
           pointers.current.set(e.pointerId, { x: e.clientX, y: e.clientY });
@@ -147,6 +150,7 @@ export function Lightbox({
           if (!pointers.current.has(e.pointerId)) return;
           pointers.current.set(e.pointerId, { x: e.clientX, y: e.clientY });
           const values = [...pointers.current.values()];
+          // 双指按距离缩放；单指只在放大后平移，原倍率下抬手判断翻页。
           if (values.length === 2) {
             const distance = Math.hypot(
               values[0].x - values[1].x,

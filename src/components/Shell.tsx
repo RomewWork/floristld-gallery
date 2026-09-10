@@ -25,6 +25,7 @@ export function Shell({
   const path = usePathname();
   const [menu, setMenu] = useState(false);
   const [query, setQuery] = useState("");
+  // 查询参数在浏览器读取；灯箱主动触发 popstate 后，同步语言链接中的选中作品。
   useEffect(() => {
     document.documentElement.lang = locale;
     setQuery(window.location.search);
@@ -76,9 +77,10 @@ export function Shell({
             className="language"
             onClick={() => {
               try {
+                // 只记录主动切换，不因用户打开某种语言的链接就覆盖偏好。
                 localStorage.setItem(LANGUAGE_PREFERENCE_KEY, other);
               } catch {
-                // A storage restriction must never prevent navigation.
+                // 浏览器禁止存储时仍允许正常跳转。
               }
             }}
             href={`${path.replace(/^\/(zh|en)/, `/${other}`)}${query}`}

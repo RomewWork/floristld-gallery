@@ -5,6 +5,6 @@ IMAGEKIT_PUBLIC_KEY=public_replace_me
 IMAGEKIT_PRIVATE_KEY=private_replace_me
 IMAGEKIT_URL_ENDPOINT=https://ik.imagekit.io/your-id
 PUBLIC_ORIGIN=http://localhost:3000
-# Optional local API testing only. Never place these two values in production.
+# 仅限回环地址的本地 API 调试；生产环境禁止设置下面两个开发绕过值。
 # ENVIRONMENT=development
 # DEV_AUTH=true

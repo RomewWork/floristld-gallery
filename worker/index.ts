@@ -75,6 +75,7 @@ const parse = <T>(schema: z.ZodType<T>, body: unknown): T => {
   return r.data!;
 };
 async function executeBatch(env: Env, statements: D1PreparedStatement[]) {
+  // 同一事务内验证租约令牌；过期请求即使晚返回，也不能覆盖新持有者的写入。
   if (!env.MUTATION_TOKEN) return env.DB.batch(statements);
   const guard = env.DB.prepare(
     "INSERT INTO mutation_guard(id,valid) VALUES(1,CASE WHEN EXISTS(SELECT 1 FROM mutation_lock WHERE id=1 AND token=? AND expires>?) THEN 1 ELSE 0 END) ON CONFLICT(id) DO UPDATE SET valid=excluded.valid",
@@ -256,7 +257,7 @@ async function ensurePublic(env: Env, key: string) {
   const asset = decode<Asset>(row);
   if (!asset.verified) fail(409, "UNVERIFIED_ASSET", "图片尚未验证");
   if (row.public_url && row.public_file_id) return;
-  // Persist intent before the provider side effect; even a lost lease leaves a reconcilable path.
+  // 先记录固定路径再请求服务商；即使租约或响应丢失，也保留后续对账线索。
   await stmt(
     env,
     "UPDATE assets SET public_path=? WHERE id=?",
@@ -277,8 +278,8 @@ async function ensurePublic(env: Env, key: string) {
     },
     row.pending_public_file_id,
   ).catch(async (error) => {
-    // Only a definitive rejection of the first attempt proves there is no copy.
-    // An earlier unknown attempt may still be in flight; never erase its intent.
+    // 只有首次尝试明确被拒绝，才可确认没有副本并清除意图。
+    // 此前结果未知的请求可能仍在执行，不能抹去其清理线索。
     if (
       !row.public_path &&
       !row.pending_public_file_id &&
@@ -310,7 +311,7 @@ async function cleanupAsset(env: Env, key: string) {
   ).first();
   if (referenced) return;
   const row = await assetRow(env, key);
-  // Keep the asset row on a partial provider failure, allowing safe operational retry.
+  // 部分外部删除失败时保留资源行供重试；先禁止新引用，再执行清理。
   await stmt(
     env,
     "UPDATE assets SET data=json_set(data,'$.verified',json('false')) WHERE id=?",
@@ -442,7 +443,7 @@ async function mutate(
     };
     const fileName = `${sessionId}.${exts[upload.mime]}`;
     const folder = `/gallery/private/${sessionId}`;
-    // Reserve twice the original bytes, including its eventual public copy. One INSERT is capacity-atomic.
+    // 按私有主文件的两倍预留，包含将来的公开副本；单次 INSERT 原子校验容量。
     const result = await stmt(
       env,
       "INSERT INTO upload_sessions(id,owner,file_name,folder,bytes,mime,expires,state) SELECT ?,?,?,?,?,?,?,'pending' WHERE (SELECT COALESCE(SUM(CAST(json_extract(data,'$.bytes') AS INTEGER)*2),0) FROM assets)+(SELECT COALESCE(SUM(bytes*2),0) FROM upload_sessions WHERE state!='complete' AND expires>?) + ? <= 2500000000",
@@ -490,8 +491,8 @@ async function mutate(
         url: await signedUrl(decode<Asset>(row).url, env),
       };
     }
-    // Expiry ends upload authorization, not reconciliation of a file already
-    // uploaded to this owner's exact assigned path. Never renew the ticket.
+    // 过期只终止上传授权，不阻止原管理员核验已上传到原指定路径的文件。
+    // 此处绝不续签票据，仍须完成全部文件与归属检查。
     await stmt(
       env,
       "UPDATE upload_sessions SET state='verifying' WHERE id=? AND state!='complete'",
@@ -515,9 +516,8 @@ async function mutate(
       } catch {
         return fail(502, "MEDIA_VERIFICATION", "暂时无法验证图片格式");
       }
-      // The provider's file-details API verifies the original file type,
-      // while its delivery response may advertise a negotiated/generic type.
-      // Only require that the signed private asset is reachable here.
+      // 原文件类型由服务商详情接口核验，CDN 响应可能协商为其他或通用类型。
+      // 此处只验证签名私有资源可访问，不用 CDN 类型覆盖原文件核验结果。
       if (!media.ok) fail(400, "UPLOAD_MIME", "图片实际格式与上传声明不一致");
       await executeBatch(env, [
         env.DB.prepare(
@@ -799,7 +799,7 @@ async function mutate(
       ).run();
       return { ...updated, version: v + 1 };
     }
-    // Asset and parent are immutable once created: create a new artwork to replace its file.
+    // 创建后资源和所属合集不可变；替换文件应新建作品，避免破坏引用与去重依据。
     const { version: _, ...fields } = parse(
       artworkFields
         .omit({ collectionId: true, assetId: true })

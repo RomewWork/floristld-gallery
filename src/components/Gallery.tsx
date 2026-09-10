@@ -19,6 +19,7 @@ import { Lightbox } from "./Lightbox";
 export function imageUrl(asset: Asset, width: number) {
   if (!asset.url.startsWith("https://")) return asset.url;
   const u = new URL(asset.url);
+  // 私有预览签名绑定原 URL，不能追加变换参数；仅调整未签名的 ImageKit 展示图。
   if (u.hostname === "ik.imagekit.io" && !u.searchParams.has("ik-s"))
     u.searchParams.set("tr", `w-${width},q-85,f-auto`);
   return u.toString();
@@ -45,6 +46,7 @@ export function ArtworkImage({
           <br />
           {t.error}
         </span>
+        {/* 父级已是链接或按钮时不再嵌套重试按钮，避免无效交互结构。 */}
         {!interactiveParent && (
           <button onClick={() => setFailedUrl(null)}>{t.retry} ↻</button>
         )}
@@ -349,6 +351,7 @@ export function CollectionPage() {
   };
   useEffect(() => {
     let valid = true;
+    // 切换合集或卸载后忽略旧响应；首屏也必须携带 artwork，才能打开后续分页中的作品。
     setError(false);
     setData(null);
     collectionPage(
@@ -379,6 +382,7 @@ export function CollectionPage() {
     if (id) u.searchParams.set("artwork", id);
     else u.searchParams.delete("artwork");
     window.history.replaceState(null, "", u);
+    // replaceState 不会自动触发 popstate，手动通知语言导航同步查询参数。
     window.dispatchEvent(new PopStateEvent("popstate"));
   };
   if (!data) return <State error={error} retry={load} />;
@@ -398,6 +402,7 @@ export function CollectionPage() {
     setBusy(true);
     try {
       const d = await collectionPage(slug, next);
+      // 首屏可能额外包含封面或深链接作品，后续分页合并时按 ID 去重。
       setData({
         ...d,
         artworks: [

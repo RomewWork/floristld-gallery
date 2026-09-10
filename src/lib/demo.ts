@@ -1,4 +1,5 @@
 import type { GalleryData } from "./types";
+// 仅作为本浏览器演示数据的初始值；真实云端初始化不会导入这些示例作品。
 export const demoData: GalleryData = {
   profile: {
     name: { zh: "林间来信", en: "Letters from the Garden" },

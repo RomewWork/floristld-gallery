@@ -29,7 +29,7 @@ npx wrangler d1 migrations apply gallery --remote --config wrangler.toml
 
 ## ImageKit 与 Access
 
-在 wrangler.toml 填写 ACCESS_TEAM_DOMAIN（仅主机名）、ACCESS_AUD、ADMIN_EMAILS（逗号分隔你的邮箱和妹妹邮箱）、IMAGEKIT_PUBLIC_KEY、IMAGEKIT_URL_ENDPOINT。私钥：
+在 wrangler.toml 填写 ACCESS_TEAM_DOMAIN（仅主机名）、ACCESS_AUD、ADMIN_EMAILS（逗号分隔你的邮箱和管理员邮箱）、IMAGEKIT_PUBLIC_KEY、IMAGEKIT_URL_ENDPOINT。私钥：
 
 ```powershell
 npx wrangler secret put IMAGEKIT_PRIVATE_KEY --config wrangler.toml

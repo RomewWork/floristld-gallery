@@ -37,6 +37,7 @@ export async function authenticate(
   testKey?: JWTVerifyGetKey,
 ) {
   const host = new URL(request.url).hostname;
+  // 开发绕过必须同时满足三个条件，避免生产配置失误直接放行。
   if (
     env.ENVIRONMENT === "development" &&
     env.DEV_AUTH === "true" &&
@@ -134,6 +135,7 @@ export function projectPublic(
     .slice(offset, offset + limit)
     .map((a) => ({ ...a, version: 0 }));
   const selected = all.find((a) => a.id === selectedId);
+  // 封面和指定作品可补入当前页，游标仍只反映正常分页，避免跳过其他作品。
   if (selected && !artworks.some((a) => a.id === selected.id))
     artworks.push({ ...selected, version: 0 });
   const assets = new Set(artworks.map((a) => a.assetId));

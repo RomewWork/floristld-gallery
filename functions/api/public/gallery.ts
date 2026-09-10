@@ -3,8 +3,8 @@ interface Context {
   env: { PUBLIC_API?: { fetch(request: Request): Promise<Response> } };
 }
 
-// Only the public gallery read is exposed through Pages. Never forward cookies
-// or Access credentials, and never depend on the custom domain's DNS.
+// Pages 仅代理公开列表读取；重新构造请求，避免转发 Cookie 或 Access 凭证。
+// PUBLIC_API 使用服务绑定，不依赖自定义域名的 DNS；路由范围见 public/_routes.json。
 export async function onRequest({ request, env }: Context): Promise<Response> {
   if (request.method !== "GET")
     return new Response("Method not allowed", {

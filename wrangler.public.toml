@@ -6,6 +6,7 @@ preview_urls = false
 
 [vars]
 ENVIRONMENT = "production"
+# 与管理 Worker 共用入口和数据库，但只开放公开读取，不绑定管理资源或图片私钥。
 PUBLIC_ONLY = "true"
 PUBLIC_ORIGIN = "https://floristld.pages.dev"
 PUBLIC_ADDITIONAL_ORIGINS = "https://crossingriver.love"

@@ -149,7 +149,7 @@ export function verifyFile(
     isPrivate: privateFile,
   };
 }
-// ImageKit cannot toggle isPrivateFile after upload. Publish a separate copy and verify it.
+// 私有文件上传后不能直接切换公开属性；发布时创建独立副本并核验，路径保持固定以便重试。
 export function publicPath(asset: Asset) {
   return `/gallery/public/${asset.id}.${new URL(asset.url).pathname.split(".").pop()}`;
 }
@@ -195,7 +195,7 @@ export async function publicCopy(
   let fileId = pendingId;
   if (!fileId) {
     const form = new FormData();
-    // Copy the stored original, not the CDN's automatically optimized response.
+    // 复制存储的展示主文件，避免把 CDN 自动优化后的响应当作原尺寸副本。
     const source = new URL(asset.url);
     source.searchParams.set("tr", "orig-true");
     form.set("file", await signedUrl(source.toString(), env));
@@ -239,8 +239,8 @@ export async function publicCopy(
   )
     fail(502, "PUBLIC_COPY_VERIFICATION", "公开图片副本验证失败，作品未发布");
   if (details.size !== asset.bytes) {
-    // Repair a previous optimized copy only after its identity, public path,
-    // type and dimensions pass verification. The fresh attempt cannot recurse.
+    // 仅在旧副本身份、公开路径、类型与尺寸核验通过后修复其优化内容。
+    // 新尝试禁止递归修复，避免服务商异常造成无限重试。
     if (
       pendingId &&
       Number.isInteger(details.size) &&

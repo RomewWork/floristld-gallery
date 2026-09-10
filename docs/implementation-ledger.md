@@ -1,38 +1,31 @@
-# Implementation ledger — current user-approved online plan
+# 实施记录
 
-Current scope: Next static frontend + Workers/D1 + Access email OTP + ImageKit free. Four planning documents have been unified to this scope. No cloud credentials are present.
+采用已确认方案：Next.js 静态前端、Workers/D1、Access 邮箱验证码、ImageKit 免费展示图。本文保留本地实施历史；最新部署配置见[部署说明](deployment.md)，验证状态见[验收记录](acceptance.md)。
 
-Task boundaries: root owns common types, frontend/admin, scripts/config/docs and integration. Backend implementer owns worker/, migrations/, tests/backend* and wrangler.toml. Review follows implementation.
+## 共享接口
 
-| Interface | Producer | Consumer | Resolution |
-| --- | --- | --- | --- |
-| src/lib/types.ts | root | UI and worker | Shared bilingual domain types |
-| GET /api/public/gallery | backend | UI | GalleryData, published only, limit/cursor for collection artwork |
-| /api/admin/* | backend | admin | Access validated, no production bypass |
-| POST uploads + complete | backend | upload UI | UploadTicket / Asset |
+| 入口 | 维护约定 |
+| --- | --- |
+| `src/lib/types.ts` | 前端与 Worker 共用双语领域类型。 |
+| `GET /api/public/gallery` | 仅发布内容，合集作品使用 `limit`、`cursor` 分页，支持指定作品。 |
+| `/api/admin/*` | Access 验证；生产环境不能绕过身份检查。 |
+| 上传票据与完成核验 | 前端使用 `UploadTicket`，服务端核验后返回 `Asset`。 |
 
-Ruling: Work in the user-provided empty workspace, without worktree scripts — no Git repository exists. No unrelated files beyond prior docs are present.
-Ruling: Implement API and frontend against a shared contract; only one implementation subagent at a time. Root works on independent UI while backend is developed.
-## Progress — 2026-09-09
+## 2026-09-09：本地实施与交付
 
-- Scaffold, bilingual public gallery, online admin UI, browser processing, Workers/D1/Access/ImageKit adapters implemented.
-- First backend review fixes landed: collection reorder version snapshots; fenced writes; tracked pending public-copy publication and cleanup.
-- Root integration regressions fixed: serialized demo writes, stale demo sort rejection, upload completion checkpoint reuse, unlinked-asset cleanup UI and demo reference protection.
-- Verified: typecheck and lint pass; 49 unit/API tests pass; original 6 desktop/mobile e2e pass; 2 additional large-source/batch/transparent upload e2e pass.
-- Visual check: desktop/mobile home, collection, About and admin screenshots captured; no page errors or horizontal overflow. Narrow public nav wraps words and is in current fix wave.
-- New 1000-artwork deep-link regression correctly fails: selected artwork beyond page 1 omitted from initial request. Fix wave in progress.
-- Independent whole-project review: no new critical auth bypass; four important recovery findings in docs/integration-fix-brief.md. Agent integration_fixes owns production fixes, root owns browser tests/visual/docs. Await report and scoped re-review before final acceptance.
-- Production build and both Worker dry-runs must be rerun after final fixes.
-- Cloud deployment, real OTP, ImageKit, true phone hardware and regional network tests blocked on account setup; not counted as passed.
+- 完成项目骨架、双语公共画廊、在线后台、浏览器图片处理及 Workers/D1/Access/ImageKit 适配。
+- 首轮后端审查补齐合集排序版本快照、写入租约检查、公开副本发布与清理记录。
+- 集成阶段修复演示并发覆盖、旧排序覆盖、上传检查点复用，以及未关联资源清理和引用保护。
+- 早期验证为 49 项单元与接口测试、6 项原有浏览器测试及 2 项大图/批量/透明图测试通过；千件作品直达回归随后暴露第一页之外的选中作品遗漏。
+- 完成上传过期恢复、公开副本未知结果处理、队列刷新失败和指定作品加载等修复，详见[集成修复记录](integration-fix-report.md)。独立复审未发现修复范围内新的重要问题。
+- 最终本地验证：56 项单元与接口测试、16 项桌面及移动尺寸浏览器测试、类型检查、lint、10 个静态路由导出、管理资源打包和两个 Worker 构建预检均通过。
+- 真实本地 Wrangler/D1 冒烟检查覆盖公开读取、本地鉴权、草稿隔离、增删改查和回收恢复；仅清理由脚本创建的空测试合集。
+- 静态预览检查首页、合集、关于页和后台，共八张截图；无页面异常或水平溢出，演示模式有明确标识。
 
-## Final local handoff — 2026-09-09
+当时尚无 Git 仓库，因此交付文件与实施记录，未执行提交或推送。这是历史环境说明，不适用于现有 Git 仓库。该次本地交付未执行远程部署，不能作为后续线上状态的依据。
 
-- Integration fix report received: docs/integration-fix-report.md. Scoped independent re-review accepted all four important fixes and found no new important breakage in changed code.
-- Final root verification: 56 unit/API tests, 16 desktop/mobile e2e, typecheck, lint all passed; Next export10 routes and admin asset packaging passed; both Worker dry-runs passed.
-- Real local Wrangler/D1 smoke passed public read, local-only auth, draft isolation, CRUD, trash/restore and cleanup of only its own empty test collection.
-- Static production preview at http://127.0.0.1:3100/zh/ and /admin/; default demo remains clearly labelled. Eight production-rendered screenshots checked; no page errors or horizontal overflow; narrow nav no longer splits words.
-- Tasks1–6 local implementation/verification complete. Task7 real cloud acceptance requires user service configuration and actual artwork/network conditions; see docs/acceptance.md. No remote deploy or billing changes performed.
-- No Git repository found by git rev-parse; files and ledger retained in original project. No merge/push/cleanup performed. Local generated test data was created and removed only by its own smoke script.
+## 2026-09-10：语言入口与中文维护资料
 
-Ruling: retain local implementation ledger and reports because no Git history exists; do not delete the only durable execution record.
-Ruling: upload retry should reconcile an existing owner-bound session/file rather than blindly reupload after expiry, preserving storage and ownership checks; exact implementation is subject to regression tests and re-review.
+- 根网址在 React 加载前按手动偏好、浏览器支持语言、英文回退的顺序跳转；明确语言链接不改写偏好。该功能的当次验证记录见[验收记录](acceptance.md)。
+- 保留并整理中文需求、方案、部署和恢复文档；后端与修复报告改为中文，删除已完成任务的两份英文临时分工说明。
+- 新增[文档索引](README.md)与[维护指南](maintenance.md)，补充源码中关键约束的中文注释。

@@ -7,11 +7,13 @@ import {
   type GalleryData,
   type Profile,
 } from "./types";
+// 只有明确配置 live 才访问真实接口；NEXT_PUBLIC_* 在构建时固化。
 export const isDemo = process.env.NEXT_PUBLIC_DATA_MODE !== "live";
 const base = process.env.NEXT_PUBLIC_API_URL?.replace(/\/$/, "") || "";
 const DB = "floristld-demo-v1";
 let memory: GalleryData | null = null;
 let writeQueue: Promise<unknown> = Promise.resolve();
+// 整段“读取—修改—保存”串行执行，避免并发上传覆盖数据；Web Locks 同时协调多个标签页。
 function exclusiveDemo<T>(work: () => Promise<T>): Promise<T> {
   const run = async (): Promise<T> => {
     if (typeof navigator !== "undefined" && navigator.locks)
@@ -19,6 +21,7 @@ function exclusiveDemo<T>(work: () => Promise<T>): Promise<T> {
     return await work();
   };
   const pending = writeQueue.then(run, run);
+  // 吞掉队列尾部的失败以便下个任务继续，当前调用仍通过 pending 收到错误。
   writeQueue = pending.catch(() => undefined);
   return pending;
 }
@@ -56,6 +59,7 @@ async function saveDemo(data: GalleryData) {
     t.onerror = () => reject(t.error);
   });
 }
+// 演示模式模拟公开可见性；真实环境的权限与私有字段过滤由 Worker 独立完成。
 export function publicData(data: GalleryData): GalleryData {
   const collections = data.collections.filter(
     (c) => c.status === "published" && !c.deletedAt,
@@ -96,6 +100,7 @@ async function request<T>(
     body: body ? JSON.stringify(body) : undefined,
     signal,
   });
+  // Access 登录页可能以重定向或 HTML 返回，不能把它当作正常 JSON 响应。
   if (r.redirected || r.headers.get("content-type")?.includes("text/html"))
     throw new ApiError(
       "登录已过期，请重新登录 / Session expired. Sign in again.",
@@ -132,6 +137,7 @@ export async function collectionPage(
     .filter((a) => collections.some((c) => c.id === a.collectionId))
     .sort((a, b) => a.position - b.position);
   const page = all.slice(cursor, cursor + 24);
+  // 深链接选中项可在分页之外补入，游标仍按原分页推进，避免漏项。
   const selected = all.find((a) => a.id === artwork);
   if (selected && !page.some((a) => a.id === selected.id)) page.push(selected);
   return {
@@ -153,6 +159,7 @@ export async function mutate<T>(
 ): Promise<T> {
   signal?.throwIfAborted();
   if (!isDemo) {
+    // 仅自动重试服务端明确返回的锁繁忙；未知写入结果留给业务检查点恢复。
     const until = Date.now() + 30_000;
     for (;;) {
       signal?.throwIfAborted();

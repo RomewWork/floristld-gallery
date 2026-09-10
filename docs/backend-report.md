@@ -1,51 +1,60 @@
-# Backend implementation
+# 后端接口与一致性说明
 
-Cloudflare Worker entry: `worker/index.ts`. D1 migrations: `migrations/0001_gallery.sql` and `migrations/0002_pending_publication.sql`; apply both. `coverId` identifies an artwork. Provider credentials are server-only; deploy requires replacing Wrangler placeholders and setting `IMAGEKIT_PRIVATE_KEY` as a secret.
+Worker 入口为 `worker/index.ts`，鉴权与公开数据筛选在 `worker/core.ts`，图片服务适配在 `worker/provider.ts`。数据库须依次执行 `migrations/0001_gallery.sql`、`migrations/0002_pending_publication.sql`。实际配置与上线步骤见[部署说明](deployment.md)。
 
-## Routes
+## 接口约定
 
-- Public: `GET /api/public/gallery?slug=&limit=24&cursor=0&artwork=`. Only published, non-deleted collections and artworks backed by verified public copies appear. Provider file IDs are blanked; management versions are zero. Covers and an explicitly selected artwork may be injected beyond the page size; they do not advance `nextCursor`.
-- Admin read: `GET /api/admin/me`, `/gallery`, `/export`. Gallery returns five-minute signed private originals. Export contains raw metadata and provider asset records for backup/cleanup, but no secrets.
-- `POST /api/admin/collections`, `PATCH /api/admin/collections/:id`; `POST /api/admin/artworks`, `PATCH /api/admin/artworks/:id`.
-- `POST /api/admin/{collections|artworks}/:id/{publish|unpublish|restore}` and `DELETE /api/admin/{collections|artworks}/:id` / `:id/permanent`. Existing-record mutations require `version`. Artwork parent and image are immutable after creation. Permanent collection deletion requires removing its child artworks first.
-- `POST /api/admin/collections/:id/order` enforces exact non-deleted membership and updates artwork/collection versions atomically.
-- `POST /api/admin/collections/order` accepts `{collectionIds,versions:{[id]:version}}` with exact non-deleted collection membership, checks every expected version, and atomically persists collection order. Public collections include `artworkCount` for all visible published works; `nextCursor` is a number or null.
-- `PATCH /api/admin/profile` accepts the complete profile.
-- `POST /api/admin/uploads` issues a five-minute ImageKit V1 ticket. Upload with the returned folder/name, `useUniqueFileName=false`, `isPrivateFile=true`. `POST /api/admin/uploads/:id/complete` accepts only `{fileId}` and verifies the result with the provider plus an authenticated image HEAD request. Upload verification sessions expire after 15 minutes. Allowed MIME types: JPEG, PNG, WebP, AVIF; max 5,000,000 bytes; max long edge 3840 pixels.
-- `DELETE /api/admin/assets/:id` with JSON `{}` safely retries cleanup of an asset without artwork references. A failed provider cleanup retains its asset record and marks it unverified. Permanent artwork deletion may return `{deleted:true,cleanupPending:true}` when record deletion succeeded but provider cleanup needs retry.
+管理接口均以 `/api/admin` 为前缀。`coverId` 指向作品 ID，而不是图片资源 ID。
 
-## Security and consistency
+| 方法与路径 | 用途与约束 |
+| --- | --- |
+| `GET /api/public/gallery?slug=&limit=24&cursor=0&artwork=` | 只返回已发布、未删除且有已验证公开图片的内容。文件 ID 清空，版本置零；封面和指定作品可额外加入结果，但不推进分页游标。 |
+| `GET /me`、`GET /gallery`、`GET /export` | 当前管理员、完整管理数据、元数据导出。管理预览使用五分钟签名 URL；导出包含资源映射，不含密钥。 |
+| `POST /collections`、`PATCH /collections/:id` | 创建与编辑合集。 |
+| `POST /artworks`、`PATCH /artworks/:id` | 创建与编辑作品。创建支持 UUID 格式的 `creationId` 去重；创建后不能改所属合集或图片资源。 |
+| `POST /{collections或artworks}/:id/{publish或unpublish或restore}` | 发布、下架或恢复；修改已有记录需提交 `version`。花括号内选择一个实际路径段。 |
+| `DELETE /{collections或artworks}/:id`、`DELETE /{collections或artworks}/:id/permanent` | 软删除、永久删除。永久删除要求已在回收站；合集须先移除全部子作品。 |
+| `POST /collections/:id/order` | 接收 `{artworkIds,version}`，包含该合集全部未删除作品且不重复；原子更新排序和版本。 |
+| `POST /collections/order` | 接收 `{collectionIds,versions:{[id]:version}}`，检查所有未删除合集及其版本，再原子更新。 |
+| `PATCH /profile` | 提交完整画师资料。 |
+| `POST /uploads` | 签发五分钟 ImageKit V1 票据，使用返回目录和文件名，设置 `useUniqueFileName=false`、`isPrivateFile=true`。 |
+| `POST /uploads/:id/complete` | 接收 `{fileId}`，从服务商核验文件，并通过签名 HEAD 请求确认可访问。 |
+| `DELETE /assets/:id` | 提交 JSON `{}`，清理无作品引用的图片；外部删除失败保留记录以便重试。 |
 
-All admin API and static requests require cryptographically verified Access JWTs with RS256, issuer, audience, expiry and an email allowlist. Missing configuration fails closed. A local bypass requires both `ENVIRONMENT=development`, `DEV_AUTH=true`, and an actual loopback hostname. Mutation Origin must exactly match the API request origin. The public endpoint grants CORS only to `PUBLIC_ORIGIN`. Responses are not cached. Static assets use Worker-first routing, so the exported `/admin/` and its JS cannot bypass Access verification.
+上传会话预留期为十五分钟；过期后原管理员仍可核验已上传到原指定路径的文件，不会获得新票据。服务端接受 JPEG、PNG、WebP、AVIF，最大 5,000,000 字节、长边 3840 像素；浏览器输入仅接受 JPEG、PNG、WebP。公开合集的 `artworkCount` 为全部可见作品数，`nextCursor` 为数字或 `null`。
 
-A separate read Worker may use the same D1 with `PUBLIC_ONLY=true`. That flag rejects every path/method except `GET` and `OPTIONS /api/public/gallery` before authentication or static-asset handling, even for authenticated users. This avoids having an Access policy on the admin hostname intercept the public API.
+永久删除作品可能返回 `{deleted:true,cleanupPending:true}`，表示作品记录已删除，但图片清理需要重试。创建去重依赖仍存在的作品记录（含软删除）；永久删除后不再保留该创建 ID 的去重依据。
 
-All mutations obtain a database-wide five-minute lease. Provider requests have 15-second timeouts. Every write/batch checks the current lease token inside the same D1 transaction, preventing an expired worker from committing after takeover. Lost workers can be retried after lease expiry. Version checks prevent stale edits; upload completion is owner-bound, atomically persisted, and idempotent for the same file ID. Body parsing is capped at 32 KiB. Public-copy failure cannot change an artwork to published.
+## 权限与并发
 
-Storage admission reserves twice each original's bytes, covering its eventual public copy. Pending, unexpired reservations count against 2.5 GB. Shared assets are stored once; provider cleanup only runs after all artwork references (including recycle-bin records) are gone. Deletion first makes the asset unavailable for new references.
+管理 API 与静态资源均校验 Access JWT 的 RS256 签名、签发者、受众、有效期及邮箱允许名单，缺配置时拒绝访问。本地绕过必须同时满足 `ENVIRONMENT=development`、`DEV_AUTH=true` 与回环主机名。写请求的 `Origin` 必须与请求地址同源。管理资源配置 `run_worker_first=true`，避免绕过鉴权直接取得静态文件。
 
-Admin gallery/export include `usage.storedBytes` (recorded originals plus public copies) and `usage.reservedBytes` (pending upload reservations plus headroom for future public copies). Their sum matches application admission usage. `Asset.bytes` remains the original file size. Public responses omit usage.
+公开只读 Worker 使用 `PUBLIC_ONLY=true`，在鉴权或静态资源处理前拒绝公开接口之外的路径和方法。公开 CORS 仅允许配置的 `PUBLIC_ORIGIN`、`PUBLIC_ADDITIONAL_ORIGINS`；当前 Pages 同源转发通过 `PUBLIC_API` 服务绑定访问它。
 
-## Provider decisions and limitations
+写操作取得数据库级五分钟租约，服务商请求超时为十五秒。每次写入和批处理都在同一 D1 事务内检查租约令牌，防止旧请求在锁被接管后落库。`version` 防止旧页面覆盖新内容。JSON 请求体上限为 32 KiB，排序请求最多 1000 个 ID；上传完成绑定原管理员，对同一文件幂等。
 
-The ImageKit documentation explicitly says a private file cannot have its private flag changed after upload. Publishing therefore uploads a separate deterministic public copy from the signed original URL, using `isPrivateFile=false`, `useUniqueFileName=false`, and `overwriteFile=true`, then fetches file details to confirm path, privacy, size and dimensions before persisting the public URL. Retrying an interrupted copy uses the same filename, avoiding another randomly named copy. Originals remain private.
+## 图片发布、清理与容量
 
-Publication intent (`public_path`) is committed before uploading. The returned provider ID is committed as `pending_public_file_id` before fetching details, so a verification failure still leaves a cleanup target. If the ID could not be recorded because the response or lease was lost, cleanup searches ImageKit for the exact deterministic path and filename. It never deletes a near match or ambiguous result. An unresolved result retains the asset/intent for a later cleanup retry. A known pending ID is reused for verification on publication retry.
+私有展示主文件保留私有；发布时从其签名地址创建固定路径的公开副本，再核验路径、私有性、大小、类型和尺寸。重试复用固定名称，避免随机生成多份副本；副本核验失败不能使作品变为已发布。
 
-Unpublishing hides gallery metadata; it does not revoke a previously shared or cached public CDN URL. Permanent deletion asks ImageKit to remove both files. CDN cache purge/expiry is separate and is not promised by this implementation.
+调用服务商前保存 `public_path`，取得副本 ID 后先保存 `pending_public_file_id`，再核验详情。即使响应丢失或租约失效，后续仍能按精确路径对账；不删除近似匹配或结果不明确的文件。首次上传明确被拒绝时可清除本次意图；若之前有结果不明的请求，继续保留线索，详见[修复记录](integration-fix-report.md)。
 
-ImageKit V1's signature covers token and expiry, not the upload payload. Authenticated administrators can technically use a ticket to upload a file the application will reject. Abandoned/rejected provider files and provider versions can occupy space outside accepted-asset accounting. Use provider-side usage alerts/limits and periodic orphan reconciliation; the application capacity guard is not a provider-enforced hard quota. A production ImageKit/Access account was not available for live integration verification.
+永久清理先将图片标为不可引用，且仅在全部作品（含回收站）不再引用时删除私有主文件和公开副本。部分删除失败保留资源记录。下架只隐藏画廊元数据，不能保证已分享的公开 URL 或 CDN 缓存立即失效。
 
-Official references checked during implementation:
+新上传按主文件两倍字节预留，计入未过期上传会话，以 2.5 GB 作为应用准入阈值。`usage.storedBytes` 为已记录主文件和公开副本，`usage.reservedBytes` 为上传预留及将来公开副本的空间；`Asset.bytes` 仅表示主文件大小，公共响应不含用量。
 
-- [ImageKit upload API](https://imagekit.io/docs/api-reference/upload-file/upload-file)
-- [ImageKit file details](https://imagekit.io/docs/api-reference/digital-asset-management-dam/managing-assets/get-file-details)
-- [ImageKit private files and signed URLs](https://imagekit.io/docs/media-delivery-basic-security)
-- [ImageKit update API](https://imagekit.io/docs/api-reference/digital-asset-management-dam/managing-assets/update-file-details)
-- [ImageKit list/search API](https://imagekit.io/docs/api-reference/digital-asset-management-dam/list-and-search-assets)
+ImageKit V1 签名覆盖令牌和有效期，不覆盖上传内容。已认证管理员仍可能上传随后被应用拒绝的文件；废弃上传、服务商版本和应用外文件可能占用账外空间。应用阈值不能代替服务商容量统计，需定期核对孤立文件。
 
-## Validation
+## 验证与历史依据
 
-`tests/backend.test.ts` uses locally signed JWTs and a real in-memory SQLite database with a D1 adapter. It covers identity rejection cases, privacy projection, publication prerequisites, upload verification, retries, version/order checks, lock exclusion and stale-token fencing, shared-file deletion and provider cleanup retry, storage reservation, CORS, and request limits.
+`tests/backend.test.ts` 使用本地签名 JWT 和带 D1 适配的真实内存 SQLite，覆盖鉴权拒绝、草稿隔离、发布条件、上传核验与恢复、版本排序、租约接管、引用删除、容量预留、CORS 和请求大小限制。
 
-Verified locally: **40/40 backend Vitest tests pass**, full project `tsc --noEmit --pretty false` exits 0, and scoped ESLint has zero warnings/errors. Regression coverage includes successful upload followed by failed details verification, deletion of that pending copy, exact-path reconciliation, and stale collection-order rejection. Live ImageKit and Cloudflare Access integration still requires deployment credentials. Worker packaging is checked separately by the root task after the admin export exists.
+初次后端交付时记录为 40 项后端测试通过，类型检查和相关文件 lint 通过；后续回归和完整验证见[验收记录](acceptance.md)，不要把早期数量当成当前结果。本地替身不能证明真实 ImageKit、Access 验证码或 Cloudflare 部署已通过。
+
+以下为实施时留存的官方资料链接，服务商接口变更时应重新核对：
+
+- [ImageKit 上传接口](https://imagekit.io/docs/api-reference/upload-file/upload-file)
+- [文件详情](https://imagekit.io/docs/api-reference/digital-asset-management-dam/managing-assets/get-file-details)
+- [私有文件与签名地址](https://imagekit.io/docs/media-delivery-basic-security)
+- [更新文件详情](https://imagekit.io/docs/api-reference/digital-asset-management-dam/managing-assets/update-file-details)
+- [文件列表与搜索](https://imagekit.io/docs/api-reference/digital-asset-management-dam/list-and-search-assets)

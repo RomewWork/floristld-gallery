@@ -1,3 +1,4 @@
+// 公共界面文案集中维护，新增键需同时补齐 zh/en；后台文案见 Admin.tsx 的 dictionary。
 export const messages = {
   zh: {
     collections: "合集作品",

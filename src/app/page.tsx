@@ -1,4 +1,4 @@
-/* Native links in noscript must work without the client router. */
+/* 禁用 JavaScript 时原生链接也须可用，因此这里不使用客户端路由链接。 */
 /* eslint-disable @next/next/no-html-link-for-pages */
 import { localeEntryScript } from "@/lib/locale-entry";
 export default function Root() {

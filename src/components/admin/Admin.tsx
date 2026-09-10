@@ -884,6 +884,7 @@ function ProfileEditor({
   );
 }
 type QueueItem = {
+  // 同一队列项重试时复用此 ID，作为服务端 creationId 防止重复创建作品。
   id: string;
   file: File;
   image?: ProcessedImage;
@@ -917,6 +918,7 @@ function UploadPanel({
     const inflight = controllers.current;
     return () => {
       active.current = false;
+      // 卸载后释放预览并中止活动请求；远端已经接受的写入不会因此撤销。
       previews.forEach(URL.revokeObjectURL);
       inflight.forEach((controller) => controller.abort());
     };
@@ -925,6 +927,7 @@ function UploadPanel({
     setItems((list) => list.map((i) => (i.id === id ? { ...i, ...patch } : i)));
   const choose = async (files: File[]) => {
     setProcessing(true);
+    // 大图逐张解码，降低峰值内存；生成展示副本后才进入上传队列。
     for (const file of files) {
       if (!active.current) break;
       const id = crypto.randomUUID();
@@ -974,6 +977,7 @@ function UploadPanel({
         controllers.current.add(controller);
         update(item.id, { controller, state: "uploading", error: undefined });
         try {
+          // 创建作品失败时复用已核验资源，不再次上传图片。
           let assetId = item.assetId;
           if (!assetId) {
             const asset = await uploadImage(
@@ -1015,9 +1019,11 @@ function UploadPanel({
       }
     }
     try {
+      // 两个工作循环共享游标，最多并发两项，兼顾手机内存和上传带宽。
       await Promise.all([work(), work()]);
       if (active.current) await refresh();
     } finally {
+      // 列表刷新失败也要解锁队列；refresh 提供独立重试入口并保留已完成项。
       if (active.current) setRunning(false);
     }
   };

@@ -2,9 +2,11 @@ export interface ProcessedImage {
   blob: Blob;
   width: number;
   height: number;
+  // 对象 URL 由上传面板持有，移除预览或卸载时须 revokeObjectURL。
   preview: string;
   name: string;
 }
+// 输入上限按 MiB，输出上限按十进制 MB；输出限制须与 Worker 的核验规则同步。
 export const MAX_INPUT_BYTES = 50 * 1024 * 1024,
   MAX_PIXELS = 40_000_000,
   MAX_OUTPUT_BYTES = 5_000_000;
@@ -13,7 +15,7 @@ export async function processImage(file: File): Promise<ProcessedImage> {
     throw new Error("请选择 JPEG、PNG 或 WebP / Choose JPEG, PNG or WebP.");
   if (file.size > MAX_INPUT_BYTES)
     throw new Error("图片超过 50 MiB / Image exceeds 50 MiB.");
-  // Read dimensions before full pixel decode when format provides them.
+  // 先尝试读取文件头，尽早拦截超大像素图；头部不完整时仍以解码后的尺寸兜底。
   const head = new Uint8Array(await file.slice(0, 512 * 1024).arrayBuffer());
   const size = readDimensions(head, file.type);
   if (size && size.width * size.height > MAX_PIXELS)
@@ -29,6 +31,7 @@ export async function processImage(file: File): Promise<ProcessedImage> {
   try {
     if (bitmap.width * bitmap.height > MAX_PIXELS)
       throw new Error("图片超过 4000 万像素 / Image exceeds 40 megapixels.");
+    // 保持原比例且不放大小图；只生成展示副本，不改写用户原文件。
     const ratio = Math.min(1, 3840 / Math.max(bitmap.width, bitmap.height));
     const width = Math.max(1, Math.round(bitmap.width * ratio)),
       height = Math.max(1, Math.round(bitmap.height * ratio));
@@ -38,6 +41,7 @@ export async function processImage(file: File): Promise<ProcessedImage> {
     const ctx = canvas.getContext("2d");
     if (!ctx) throw new Error("浏览器内存不足 / Not enough browser memory.");
     ctx.drawImage(bitmap, 0, 0, width, height);
+    // 固定质量生成 WebP（不支持时浏览器回退 PNG），超限就提示用户自行导出。
     const blob = await new Promise<Blob>((resolve, reject) =>
       canvas.toBlob(
         (b) =>

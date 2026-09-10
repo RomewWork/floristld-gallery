@@ -30,6 +30,8 @@ npm run api:check
 
 真实上线前请阅读 [部署说明](docs/deployment.md) 与 [备份恢复](docs/backup-restore.md)。测试与未完成项目见 [验收记录](docs/acceptance.md)。
 
+完整中文资料见 [文档索引](docs/README.md)，接手代码可先读 [维护指南](docs/maintenance.md)。
+
 ## 设计与实现
 
 - 中文与英文界面；一个合集多件作品；原始比例网格、键盘和移动端灯箱。
